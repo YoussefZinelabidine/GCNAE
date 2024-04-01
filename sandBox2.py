@@ -43,26 +43,34 @@ def train_eval_ae(tab_path, batch_size=8192, attribute_dims=None):
     files = [f for f in listdir(tab_path) if isfile(join(tab_path, f))]
     
     chunksize = 1000
-    all_chunks = pd.DataFrame()
+    all_X = pd.DataFrame()
+    all_df_tab = pd.DataFrame()
 
     for filename in tqdm(files):
         file_path = tab_path + filename
         
-        df_tab = pd.read_csv(file_path, dtype={'exec_id': int, 'y': int})
-        df_tab = df_tab.sort_values(by=['exec_id', 'elapsed_time'])
-        original_y = df_tab[['event_id', 'exec_id', 'y']]
-        df_tab.y = (df_tab.y > 0).astype(int)
+        for chunk in pd.read_csv(file_path, dtype={'exec_id': int, 'y': int}, chunksize=chunksize, nrows =100 ):
+            df_tab = chunk.sort_values(by=['exec_id', 'elapsed_time'])
+            df_tab.y = (df_tab.y > 0).astype(int)
+            all_df_tab = pd.concat([all_df_tab, df_tab])
 
-        for chunk in pd.read_csv(file_path, dtype={'exec_id': int, 'y': int}, chunksize=chunksize):
             X = chunk.drop(columns=['event_id', 'elapsed_time', 'y'])
             X = X.pivot_table(index='exec_id', columns=X.groupby('exec_id').cumcount())
             X = X.sort_index(axis='columns', level=1)
             X.columns = X.columns.map('{0[0]}|{0[1]}'.format)
-            X_mask = X.isnull()
-            X = X.fillna(0)
-            all_chunks = pd.concat([all_chunks, X])
+            all_X = pd.concat([all_X, X])
             
-        X = all_chunks
+        df_tab= all_df_tab
+        print(df_tab.shape)
+        original_y = df_tab[['event_id', 'exec_id', 'y']]
+        print(original_y.shape)  
+        X = all_X
+        print(X.shape)
+        X_mask = X.isnull()
+        print(X_mask.shape)
+        X = X.fillna(0)
+        print(X.shape)
+        
 
         # Convert DataFrame to tensor
         scaler = StandardScaler()
